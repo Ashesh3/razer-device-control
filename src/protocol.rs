@@ -58,6 +58,11 @@ pub fn set_eq_bands(bands: &[i8; 10]) -> [u8; PKT_SIZE] {
     mxic_packet(0x12, 0x08, 0x0D, 0x95, &params)
 }
 
+/// Get wireless connection status (cmd3_0x20). Send this, then read response.
+pub fn get_wireless_status() -> [u8; PKT_SIZE] {
+    mxic_packet(0x08, 0x08, 0x03, 0x20, &[])
+}
+
 /// Get battery level (cmd3_0x21). Send this, then read response.
 pub fn get_battery() -> [u8; PKT_SIZE] {
     mxic_packet(0x08, 0x08, 0x03, 0x21, &[])

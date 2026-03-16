@@ -87,6 +87,26 @@ impl Device {
         Ok(())
     }
 
+    /// Check if headset is wirelessly connected to the dongle.
+    pub fn is_headset_connected(&self) -> bool {
+        if self.cmd(&protocol::set_remote_mode(true)).is_err() {
+            return false;
+        }
+        if self.send(&protocol::get_wireless_status()).is_err() {
+            return false;
+        }
+        for _ in 0..10 {
+            if let Some(resp) = self.read(100) {
+                for i in 0..resp.len().saturating_sub(3) {
+                    if resp[i] == 0x20 && i > 8 {
+                        return resp[i + 3] == 1;
+                    }
+                }
+            }
+        }
+        false
+    }
+
     /// Get battery percentage. Returns None if unavailable.
     pub fn get_battery(&self) -> Option<u8> {
         self.cmd(&protocol::set_remote_mode(true)).ok()?;

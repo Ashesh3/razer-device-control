@@ -53,7 +53,20 @@ rzr - Configuration
 
 ### Auto-Start on Login
 
-Place a shortcut to `rzr.exe --silent` in `shell:startup` (press Win+R, type `shell:startup`). It will apply your profile silently on every login with no console window.
+The best way to run rzr is with `--silent --watch`. This runs invisibly in the background, polls the dongle every 5 seconds, and automatically applies your profile whenever the headset connects or reconnects. A global mutex prevents duplicate instances.
+
+**Option A: Task Scheduler (recommended)**
+
+1. Open Task Scheduler (`taskschd.msc`)
+2. Create Basic Task → name it `rzr`
+3. Trigger: "When I log on"
+4. Action: Start a program → browse to `rzr.exe`, add arguments: `--silent --watch`
+5. Finish, then edit the task: check "Run whether user is logged on or not" is unchecked, and uncheck "Stop the task if it runs longer than"
+
+**Option B: Startup folder**
+
+1. Press Win+R, type `shell:startup`
+2. Create a shortcut to `rzr.exe --silent --watch`
 
 ## How It Works
 

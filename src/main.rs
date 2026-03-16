@@ -3,6 +3,39 @@ mod protocol;
 mod registry;
 
 use std::io::{self, Write};
+use std::thread;
+use std::time::Duration;
+
+#[cfg(windows)]
+extern "system" {
+    fn FreeConsole() -> i32;
+    fn CreateMutexW(attrs: *mut u8, initial_owner: i32, name: *const u16) -> *mut u8;
+    fn GetLastError() -> u32;
+}
+
+const _ERROR_ALREADY_EXISTS: u32 = 183;
+
+/// Ensure only one instance of rzr --watch is running.
+/// Returns false if another instance already holds the mutex.
+#[cfg(windows)]
+fn acquire_single_instance() -> bool {
+    let name: Vec<u16> = "Global\\rzr_blackshark_v2_pro\0"
+        .encode_utf16()
+        .collect();
+    unsafe {
+        let handle = CreateMutexW(std::ptr::null_mut(), 0, name.as_ptr());
+        if handle.is_null() || GetLastError() == _ERROR_ALREADY_EXISTS {
+            return false;
+        }
+    }
+    // Leak the handle — lives for process lifetime
+    true
+}
+
+#[cfg(not(windows))]
+fn acquire_single_instance() -> bool {
+    true
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -12,7 +45,12 @@ fn main() {
         // Hide console window on Windows
         #[cfg(windows)]
         unsafe { FreeConsole(); }
-        run_silent();
+
+        if args.iter().any(|a| a == "--watch" || a == "-w") {
+            run_watch(true);
+        } else {
+            run_silent();
+        }
         return;
     }
 
@@ -21,9 +59,12 @@ fn main() {
     match cmd.map(|s| s.as_str()) {
         Some("config") => run_config(),
         Some("help") => print_help(),
+        Some("watch") => run_watch(false),
         None => {
             if args.iter().any(|a| a == "--help" || a == "-h") {
                 print_help();
+            } else if args.iter().any(|a| a == "--watch" || a == "-w") {
+                run_watch(false);
             } else {
                 run_apply();
             }
@@ -36,10 +77,6 @@ fn main() {
     }
 }
 
-#[cfg(windows)]
-extern "system" {
-    fn FreeConsole() -> i32;
-}
 
 fn print_help() {
     println!("rzr - Razer BlackShark V2 Pro Audio Initializer");
@@ -50,7 +87,9 @@ fn print_help() {
     println!("Usage:");
     println!("  rzr              Apply saved settings to headset");
     println!("  rzr config       Interactive configuration menu");
+    println!("  rzr --watch      Watch for headset and apply on connect");
     println!("  rzr --silent     Apply silently (no window, for startup)");
+    println!("  rzr --silent --watch  Watch silently (best for startup)");
     println!("  rzr --help       Show this help");
     println!();
     println!("Settings are stored in the Windows Registry at HKCU\\SOFTWARE\\rzr");
@@ -70,6 +109,64 @@ fn run_silent() {
         settings.volume,
         settings.enhancement,
     );
+}
+
+fn run_watch(silent: bool) {
+    if !acquire_single_instance() {
+        if !silent {
+            eprintln!("rzr: another instance is already running.");
+        }
+        std::process::exit(0);
+    }
+
+    let settings = registry::Settings::load();
+    let poll_interval = Duration::from_secs(5);
+    let mut was_connected = false;
+    let mut applied = false;
+
+    if !silent {
+        println!("rzr: watching for headset (poll every 5s, Ctrl+C to stop)");
+    }
+
+    loop {
+        let connected = match device::Device::open(1000) {
+            Ok(dev) => {
+                let c = dev.is_headset_connected();
+                if c && !applied {
+                    // Headset just connected (or first detection)
+                    if !silent {
+                        println!("  Headset connected, applying profile...");
+                    }
+                    let _ = dev.apply_profile(
+                        settings.eq_enabled,
+                        &settings.eq_bands,
+                        settings.volume,
+                        settings.enhancement,
+                    );
+                    if !silent {
+                        if let Some(batt) = dev.get_battery() {
+                            println!("  Battery: {}%", batt);
+                        }
+                        println!("  Done!");
+                    }
+                    applied = true;
+                }
+                c
+            }
+            Err(_) => false,
+        };
+
+        if was_connected && !connected {
+            // Headset disconnected — reset so we re-apply on next connect
+            if !silent {
+                println!("  Headset disconnected, waiting for reconnect...");
+            }
+            applied = false;
+        }
+
+        was_connected = connected;
+        thread::sleep(poll_interval);
+    }
 }
 
 fn run_apply() {
