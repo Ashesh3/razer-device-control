@@ -2,6 +2,9 @@
 
 Tiny portable tool that fixes audio quality on the **Razer BlackShark V2 Pro** wireless headset without needing Razer Synapse.
 
+<img width="479" height="497" alt="image" src="https://github.com/user-attachments/assets/d77e0d6b-d910-46f5-be87-72de9e18a1c0" />
+
+
 ## The Problem
 
 When you connect your BlackShark V2 Pro and switch to a custom profile, the audio sounds quiet and flat. Starting Razer Synapse and switching profiles magically fixes it — audio becomes louder, clearer, and the EQ actually works.
