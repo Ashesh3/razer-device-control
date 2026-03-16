@@ -18,6 +18,7 @@ This happens because the headset's onboard presets are basic factory defaults. S
 ```
 rzr              # Apply saved audio profile to headset
 rzr config       # Interactive configuration menu
+rzr --silent     # Apply silently (no window, perfect for startup)
 rzr --help       # Show help
 ```
 
@@ -52,7 +53,7 @@ rzr - Configuration
 
 ### Auto-Start on Login
 
-Place `rzr.exe` (or a shortcut to it) in `shell:startup` (press Win+R, type `shell:startup`). It will apply your profile every time you log in.
+Place a shortcut to `rzr.exe --silent` in `shell:startup` (press Win+R, type `shell:startup`). It will apply your profile silently on every login with no console window.
 
 ## How It Works
 

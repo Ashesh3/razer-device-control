@@ -6,20 +6,39 @@ use std::io::{self, Write};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    let silent = args.iter().any(|a| a == "--silent" || a == "-s");
 
-    if args.len() > 1 {
-        match args[1].as_str() {
-            "config" => run_config(),
-            "--help" | "-h" | "help" => print_help(),
-            other => {
-                eprintln!("Unknown command: {other}");
-                eprintln!("Use 'rzr config' to configure, or just 'rzr' to apply settings.");
-                std::process::exit(1);
+    if silent {
+        // Hide console window on Windows
+        #[cfg(windows)]
+        unsafe { FreeConsole(); }
+        run_silent();
+        return;
+    }
+
+    let cmd = args.iter().find(|a| !a.starts_with('-') && *a != &args[0]);
+
+    match cmd.map(|s| s.as_str()) {
+        Some("config") => run_config(),
+        Some("help") => print_help(),
+        None => {
+            if args.iter().any(|a| a == "--help" || a == "-h") {
+                print_help();
+            } else {
+                run_apply();
             }
         }
-    } else {
-        run_apply();
+        Some(other) => {
+            eprintln!("Unknown command: {other}");
+            eprintln!("Use 'rzr config' to configure, or just 'rzr' to apply settings.");
+            std::process::exit(1);
+        }
     }
+}
+
+#[cfg(windows)]
+extern "system" {
+    fn FreeConsole() -> i32;
 }
 
 fn print_help() {
@@ -31,11 +50,26 @@ fn print_help() {
     println!("Usage:");
     println!("  rzr              Apply saved settings to headset");
     println!("  rzr config       Interactive configuration menu");
+    println!("  rzr --silent     Apply silently (no window, for startup)");
     println!("  rzr --help       Show this help");
     println!();
     println!("Settings are stored in the Windows Registry at HKCU\\SOFTWARE\\rzr");
     println!();
     println!("Tip: Add rzr.exe to shell:startup to run automatically on login.");
+}
+
+fn run_silent() {
+    let settings = registry::Settings::load();
+    let dev = match device::Device::open(settings.wait_timeout_ms) {
+        Ok(d) => d,
+        Err(_) => std::process::exit(1),
+    };
+    let _ = dev.apply_profile(
+        settings.eq_enabled,
+        &settings.eq_bands,
+        settings.volume,
+        settings.enhancement,
+    );
 }
 
 fn run_apply() {
@@ -77,6 +111,14 @@ fn run_apply() {
 
 fn run_config() {
     let mut settings = registry::Settings::load();
+
+    // Show battery on entry
+    if let Ok(dev) = device::Device::open(2000) {
+        if let Some(batt) = dev.get_battery() {
+            println!("\n  Device: {}", dev.product);
+            println!("  Battery: {}%", batt);
+        }
+    }
 
     loop {
         println!();
