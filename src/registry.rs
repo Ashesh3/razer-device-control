@@ -12,6 +12,8 @@ pub struct Settings {
     pub volume: u8,
     pub enhancement: bool,
     pub wait_timeout_ms: u32,
+    pub default_speaker: String,    // endpoint ID, empty = don't change
+    pub default_microphone: String, // endpoint ID, empty = don't change
 }
 
 impl Default for Settings {
@@ -22,6 +24,8 @@ impl Default for Settings {
             volume: 255,
             enhancement: true,
             wait_timeout_ms: 5000,
+            default_speaker: String::new(),
+            default_microphone: String::new(),
         }
     }
 }
@@ -53,6 +57,12 @@ impl Settings {
         if let Ok(v) = key.get_value::<u32, _>("wait_timeout_ms") {
             s.wait_timeout_ms = v;
         }
+        if let Ok(v) = key.get_value::<String, _>("default_speaker") {
+            s.default_speaker = v;
+        }
+        if let Ok(v) = key.get_value::<String, _>("default_microphone") {
+            s.default_microphone = v;
+        }
 
         s
     }
@@ -73,6 +83,10 @@ impl Settings {
         key.set_value("enhancement", &(self.enhancement as u32))
             .map_err(|e| format!("Registry write failed: {e}"))?;
         key.set_value("wait_timeout_ms", &self.wait_timeout_ms)
+            .map_err(|e| format!("Registry write failed: {e}"))?;
+        key.set_value("default_speaker", &self.default_speaker)
+            .map_err(|e| format!("Registry write failed: {e}"))?;
+        key.set_value("default_microphone", &self.default_microphone)
             .map_err(|e| format!("Registry write failed: {e}"))?;
 
         Ok(())

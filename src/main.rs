@@ -1,3 +1,4 @@
+mod audio;
 mod device;
 mod protocol;
 mod registry;
@@ -97,6 +98,32 @@ fn print_help() {
     println!("Tip: Add rzr.exe to shell:startup to run automatically on login.");
 }
 
+/// Set default audio devices if configured.
+fn apply_audio_defaults(settings: &registry::Settings, silent: bool) {
+    if !settings.default_speaker.is_empty() {
+        if !silent {
+            print!("  Setting default speaker...");
+            io::stdout().flush().ok();
+        }
+        if audio::set_default_device(&settings.default_speaker) {
+            if !silent { println!(" done"); }
+        } else if !silent {
+            println!(" failed");
+        }
+    }
+    if !settings.default_microphone.is_empty() {
+        if !silent {
+            print!("  Setting default microphone...");
+            io::stdout().flush().ok();
+        }
+        if audio::set_default_device(&settings.default_microphone) {
+            if !silent { println!(" done"); }
+        } else if !silent {
+            println!(" failed");
+        }
+    }
+}
+
 fn run_silent() {
     let settings = registry::Settings::load();
     let dev = match device::Device::open(settings.wait_timeout_ms) {
@@ -109,6 +136,7 @@ fn run_silent() {
         settings.volume,
         settings.enhancement,
     );
+    apply_audio_defaults(&settings, true);
 }
 
 fn run_watch(silent: bool) {
@@ -149,6 +177,7 @@ fn run_watch(silent: bool) {
                         }
                         println!("  Done!");
                     }
+                    apply_audio_defaults(&settings, silent);
                     applied = true;
                 }
                 c
@@ -204,6 +233,8 @@ fn run_apply() {
             std::process::exit(1);
         }
     }
+
+    apply_audio_defaults(&settings, false);
 }
 
 fn run_config() {
@@ -236,6 +267,28 @@ fn run_config() {
             if settings.enhancement { "yes" } else { "no" }
         );
         println!("  5. Wait Timeout:   {}ms", settings.wait_timeout_ms);
+        println!();
+        let spk_display = if settings.default_speaker.is_empty() {
+            "disabled".to_string()
+        } else {
+            // Try to find name for stored ID
+            let devs = audio::list_devices("render");
+            devs.iter()
+                .find(|d| d.id == settings.default_speaker)
+                .map(|d| d.name.clone())
+                .unwrap_or_else(|| settings.default_speaker.clone())
+        };
+        let mic_display = if settings.default_microphone.is_empty() {
+            "disabled".to_string()
+        } else {
+            let devs = audio::list_devices("capture");
+            devs.iter()
+                .find(|d| d.id == settings.default_microphone)
+                .map(|d| d.name.clone())
+                .unwrap_or_else(|| settings.default_microphone.clone())
+        };
+        println!("  s. Default Speaker:  {}", spk_display);
+        println!("  m. Default Mic:      {}", mic_display);
         println!();
         println!("  Presets:");
         println!("  6. Load preset: flat");
@@ -347,6 +400,63 @@ fn run_config() {
                         }
                     }
                     Err(e) => println!("  {e}"),
+                }
+                apply_audio_defaults(&settings, false);
+            }
+            "s" | "S" => {
+                let devices = audio::list_devices("render");
+                if devices.is_empty() {
+                    println!("  No speakers found.");
+                } else {
+                    println!("  Available speakers:");
+                    println!("    0. Disable (don't change default)");
+                    for (i, d) in devices.iter().enumerate() {
+                        let marker = if d.is_default { " [current default]" } else { "" };
+                        println!("    {}. {}{}", i + 1, d.name, marker);
+                    }
+                    print!("  Select: ");
+                    io::stdout().flush().ok();
+                    let mut buf = String::new();
+                    io::stdin().read_line(&mut buf).ok();
+                    match buf.trim().parse::<usize>() {
+                        Ok(0) => {
+                            settings.default_speaker = String::new();
+                            println!("  Default speaker override disabled.");
+                        }
+                        Ok(n) if n <= devices.len() => {
+                            settings.default_speaker = devices[n - 1].id.clone();
+                            println!("  Will set default to: {}", devices[n - 1].name);
+                        }
+                        _ => println!("  Invalid selection."),
+                    }
+                }
+            }
+            "m" | "M" => {
+                let devices = audio::list_devices("capture");
+                if devices.is_empty() {
+                    println!("  No microphones found.");
+                } else {
+                    println!("  Available microphones:");
+                    println!("    0. Disable (don't change default)");
+                    for (i, d) in devices.iter().enumerate() {
+                        let marker = if d.is_default { " [current default]" } else { "" };
+                        println!("    {}. {}{}", i + 1, d.name, marker);
+                    }
+                    print!("  Select: ");
+                    io::stdout().flush().ok();
+                    let mut buf = String::new();
+                    io::stdin().read_line(&mut buf).ok();
+                    match buf.trim().parse::<usize>() {
+                        Ok(0) => {
+                            settings.default_microphone = String::new();
+                            println!("  Default mic override disabled.");
+                        }
+                        Ok(n) if n <= devices.len() => {
+                            settings.default_microphone = devices[n - 1].id.clone();
+                            println!("  Will set default to: {}", devices[n - 1].name);
+                        }
+                        _ => println!("  Invalid selection."),
+                    }
                 }
             }
             "0" => {
