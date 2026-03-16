@@ -1,0 +1,15 @@
+[package]
+name = "rzr"
+version = "0.1.0"
+edition = "2021"
+description = "Razer BlackShark V2 Pro audio initializer — replaces Razer Synapse for audio config"
+license = "MIT"
+
+[dependencies]
+hidapi = "2.6"
+winreg = "0.55"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
